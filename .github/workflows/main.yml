@@ -1,0 +1,88 @@
+#
+# Licensed to the Apache Software Foundation (ASF) under one
+# or more contributor license agreements.  See the NOTICE file
+# distributed with this work for additional information
+# regarding copyright ownership.  The ASF licenses this file
+# to you under the Apache License, Version 2.0 (the
+# "License"); you may not use this file except in compliance
+# with the License.  You may obtain a copy of the License at
+#
+#   http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing,
+# software distributed under the License is distributed on an
+# "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+# KIND, either express or implied.  See the License for the
+# specific language governing permissions and limitations
+# under the License.
+#
+
+name: Publish
+
+on:
+  push:
+    branches:
+    - '**'
+jobs:
+  main:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Spark repository
+        uses: actions/checkout@v2
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v1
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v1
+      - name: Login to DockerHub
+        uses: docker/login-action@v2
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+      - name: Login to GHCR
+        uses: docker/login-action@v2
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Build and push (Spark + PySpark)
+        uses: docker/build-push-action@v2
+        with:
+          context: ./3.3.0/scala2.12-java11-python3-ubuntu/
+          push: true
+          tags: |
+            yikunkero/spark:3.3.0
+            yikunkero/spark:latest
+            yikunkero/spark:python3
+            yikunkero/spark:3.3.0-python3
+            yikunkero/spark:scala2.12-java11-python3-ubuntu
+          platforms: linux/amd64,linux/arm64
+      - name: Build and push (Spark only)
+        uses: docker/build-push-action@v2
+        with:
+          context: ./3.3.0/scala2.12-java11-ubuntu/
+          push: true
+          tags: |
+            yikunkero/spark:scala2.12-java11-ubuntu
+            yikunkero/spark:scala
+            yikunkero/spark:3.3.0-scala
+          platforms: linux/amd64,linux/arm64
+      - name: Build and push (Spark + SparkR)
+        uses: docker/build-push-action@v2
+        with:
+          context: ./3.3.0/scala2.12-java11-r-ubuntu/
+          push: true
+          tags: |
+            yikunkero/spark:scala2.12-java11-r-ubuntu
+            yikunkero/spark:r
+            yikunkero/spark:3.3.0-r
+          platforms: linux/amd64,linux/arm64
+      - name: Build and push (Spark + PySpark + SparkR)
+        uses: docker/build-push-action@v2
+        with:
+          context: ./3.3.0/scala2.12-java11-python3-r-ubuntu/
+          push: true
+          tags: |
+            yikunkero/spark:scala2.12-java11-python3-r-ubuntu
+          platforms: linux/amd64,linux/arm64
+      - name: Image digest
+        run: echo ${{ steps.docker_build.outputs.digest }}
