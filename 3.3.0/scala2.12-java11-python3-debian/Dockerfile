@@ -29,7 +29,10 @@ RUN set -ex && \
     apt-get update && \
     ln -s /lib /lib64 && \
     apt install -y gnupg2 wget bash tini libc6 libpam-modules krb5-user libnss3 procps net-tools && \
+    apt install -y python3 python3-pip && \
+    pip3 install --upgrade pip setuptools && \
     mkdir -p /opt/spark && \
+    mkdir /opt/spark/python && \
     mkdir -p /opt/spark/examples && \
     mkdir -p /opt/spark/work-dir && \
     touch /opt/spark/RELEASE && \
@@ -65,6 +68,8 @@ RUN set -ex; \
     mv examples /opt/spark/; \
     mv kubernetes/tests /opt/spark/; \
     mv data /opt/spark/; \
+    mv python/pyspark /opt/spark/python/pyspark/; \
+    mv python/lib /opt/spark/python/lib/; \
     cd ..; \
     rm -rf "$SPARK_TMP";
 
