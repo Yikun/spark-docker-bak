@@ -14,9 +14,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 #
-ARG java_image_tag=11-jre-slim
-
-FROM openjdk:${java_image_tag}
+FROM debian:bullseye-slim
 
 ARG spark_uid=185
 
@@ -28,10 +26,9 @@ ARG spark_uid=185
 # docker build -t spark:latest -f kubernetes/dockerfiles/spark/Dockerfile .
 
 RUN set -ex && \
-    sed -i 's/http:\/\/deb.\(.*\)/https:\/\/deb.\1/g' /etc/apt/sources.list && \
     apt-get update && \
     ln -s /lib /lib64 && \
-    apt install -y bash tini libc6 libpam-modules krb5-user libnss3 procps && \
+    apt install -y wget bash tini libc6 libpam-modules krb5-user libnss3 procps openjdk-11-jre net-tools && \
     mkdir -p /opt/spark && \
     mkdir -p /opt/spark/examples && \
     mkdir -p /opt/spark/work-dir && \
@@ -42,20 +39,32 @@ RUN set -ex && \
     chgrp root /etc/passwd && chmod ug+rw /etc/passwd && \
     rm -rf /var/cache/apt/*
 
-COPY jars /opt/spark/jars
-COPY bin /opt/spark/bin
-COPY sbin /opt/spark/sbin
-COPY kubernetes/dockerfiles/spark/entrypoint.sh /opt/
-COPY kubernetes/dockerfiles/spark/decom.sh /opt/
-COPY examples /opt/spark/examples
-COPY kubernetes/tests /opt/spark/tests
-COPY data /opt/spark/data
+# TODO: GPG validation
+ARG DISTRO_NAME=spark-3.3.0-bin-hadoop3
+ARG SHORT_DISTRO_NAME=spark-3.3.0
+RUN wget https://dlcdn.apache.org/spark/$SHORT_DISTRO_NAME/$DISTRO_NAME.tgz
+RUN tar zxvf $DISTRO_NAME.tgz
+
+WORKDIR $DISTRO_NAME
+
+RUN mv jars /opt/spark/
+RUN mv bin /opt/spark/
+RUN mv sbin /opt/spark/
+# RUN mv kubernetes/dockerfiles/spark/entrypoint.sh /opt/
+COPY entrypoint.sh /opt/
+RUN mv kubernetes/dockerfiles/spark/decom.sh /opt/
+RUN mv examples /opt/spark/
+RUN mv kubernetes/tests /opt/spark/
+RUN mv data /opt/spark/
+
+RUN rm -rf $DISTRO_NAME $DISTRO_NAME.tgz
 
 ENV SPARK_HOME /opt/spark
 
 WORKDIR /opt/spark/work-dir
 RUN chmod g+w /opt/spark/work-dir
 RUN chmod a+x /opt/decom.sh
+RUN chmod a+x /opt/entrypoint.sh
 
 ENTRYPOINT [ "/opt/entrypoint.sh" ]
 
