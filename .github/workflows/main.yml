@@ -46,5 +46,6 @@ jobs:
           context: ./3.3.0/scala2.12-java11-debian/
           push: true
           tags: ghcr.io/yikun/spark-docker/spark:v3.3.0
+          platforms: linux/amd64,linux/arm64
       - name: Image digest
         run: echo ${{ steps.docker_build.outputs.digest }}
