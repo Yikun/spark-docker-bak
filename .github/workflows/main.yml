@@ -17,7 +17,7 @@
 # under the License.
 #
 
-name: Publish
+name: Publish test
 
 on:
   push:
