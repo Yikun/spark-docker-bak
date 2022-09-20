@@ -54,27 +54,64 @@ jobs:
 
       - name: Generate tags
         run: |
-          BASE_PATH=${{ matrix.spark_version }}/scala${{ matrix.scala_version }}-java${{ matrix.java_version }}
-          REPO=ghcr.io/yikun/spark-docker/spark-0919
-          IMAGE_PATH=$BASE_PATH-${{ matrix.image_suffix }}
-          # Find the tags in version.json according to given path and repo
-          IMAGE_TAGS=`./image-meta.py -p $IMAGE_PATH -r $REPO`
+          TAG=scala${{ matrix.scala_version }}-java${{ matrix.java_version }}-${{ matrix.image_suffix }}
 
+          # TODO: change yikun, yikunkero to apache
+          TEST_REPO=ghcr.io/yikun/spark-docker
+          REPO=yikunkero
+          IMAGE_NAME=spark-0920
+          IMAGE_PATH=${{ matrix.spark_version }}/$TAG
+          UNIQUE_IMAGE_TAG=${{ matrix.spark_version }}-$TAG
+
+          # Find the tags in version.json according to given path and repo
+          IMAGE_TAGS=`./image-meta.py -p $IMAGE_PATH -r $REPO/$IMAGE_NAME`
+          TEST_IMAGE_TAGS=`./image-meta.py -p $IMAGE_PATH -r $TEST_REPO/$IMAGE_NAME`
+
+          # Unique image tag in each version: scala2.12-java11-python3-ubuntu
+          echo "UNIQUE_IMAGE_TAG=${UNIQUE_IMAGE_TAG}" >> $GITHUB_ENV
+          # Test repo: ghcr.io/apache/spark-docker
+          echo "TEST_REPO=${TEST_REPO}" >> $GITHUB_ENV
+          # Image name: spark
+          echo "IMAGE_NAME=${IMAGE_NAME}" >> $GITHUB_ENV
+          # Image dockerfile path: 3.3.0/scala2.12-java11-python3-ubuntu
           echo "IMAGE_PATH=${IMAGE_PATH}" >> $GITHUB_ENV
+          # IMAGE_TAGS: apache/spark:3.3.0-scala2.12-java11-python3-ubuntu,apache/spark:3.3.0-python3,apache/spark:python3,apache/spark:3.3.0,apache/spark:latest
           echo "IMAGE_TAGS=${IMAGE_TAGS}" >> $GITHUB_ENV
+          # TEST_IMAGE_TAGS: ghcr.io/yikun/spark-docker/spark:3.3.0-scala2.12-java11-python3-ubuntu,ghcr.io/yikun/spark-docker/spark:3.3.0-python3
+          echo "TEST_IMAGE_TAGS=${TEST_IMAGE_TAGS}" >> $GITHUB_ENV
 
       - name: Print Image tags
         run: |
+          echo ${UNIQUE_IMAGE_TAG}
+          echo ${TEST_REPO}
+          echo ${IMAGE_NAME}
           echo ${IMAGE_PATH}
           echo ${IMAGE_TAGS} | xargs -d"," -n1
+          echo ${TEST_IMAGE_TAGS} | xargs -d"," -n1
 
-      # - name: Build image
-      #   uses: docker/build-push-action@v2
-      #   with:
-      #     context: ${{ env.IMAGE_PATH }}
-      #     push: true
-      #     tags: ${{ env.IMAGE_TAGS }}
-      #     platforms: linux/amd64,linux/arm64
+      - name: Cache Scala, SBT and Maven
+        uses: actions/cache@v2
+        with:
+          path: |
+            build/apache-maven-*
+            build/scala-*
+            build/*.jar
+            ~/.sbt
+          key: build-${{ matrix.spark_version }}-scala${{ matrix.scala_version }}-java${{ matrix.java_version }}
+
+      - name: Cache Coursier local repository
+        uses: actions/cache@v2
+        with:
+          path: ~/.cache/coursier
+          key: build-${{ matrix.spark_version }}-scala${{ matrix.scala_version }}-java${{ matrix.java_version }}
+
+      - name: Build and push test image
+        uses: docker/build-push-action@v2
+        with:
+          context: ${{ env.IMAGE_PATH }}
+          push: true
+          tags: ${{ env.TEST_IMAGE_TAGS }}
+          platforms: linux/amd64,linux/arm64
 
       - name: Test - Checkout Spark repository
         uses: actions/checkout@v2
@@ -83,6 +120,14 @@ jobs:
           repository: apache/spark
           ref: v${{ matrix.spark_version }}
           path: ${{ github.workspace }}/spark
+
+      - name: Test - Cherry pick commits
+        working-directory: ${{ github.workspace }}/spark
+        run: |
+          # https://github.com/apache/spark/commit/83963828b54bffe99527a004057272bc584cbc26
+          git -c user.name='Apache Spark Test Account' -c user.email='sparktestacc@gmail.com' cherry-pick 83963828b54bffe99527a004057272bc584cbc26
+          # https://github.com/apache/spark/commit/5ea2b386eb866e20540660cdb6ed43792cb29969
+          git -c user.name='Apache Spark Test Account' -c user.email='sparktestacc@gmail.com' cherry-pick 5ea2b386eb866e20540660cdb6ed43792cb29969
 
       - name: Test - Install Java ${{ inputs.java }}
         uses: actions/setup-java@v1
@@ -100,7 +145,7 @@ jobs:
           kubectl get pods -A
           kubectl describe node
 
-      - name: Test - Run Spark on K8S integration test
+      - name: Test - Run Spark on K8S integration test (With driver cpu 0.5, executor cpu 0.2 limited)
         working-directory: ${{ github.workspace }}/spark
         run: |
           # Prepare PV test
@@ -110,21 +155,24 @@ jobs:
           minikube mount ${PVC_TESTS_HOST_PATH}:${PVC_TESTS_VM_PATH} --gid=0 --uid=185 &
           kubectl create clusterrolebinding serviceaccounts-cluster-admin --clusterrole=cluster-admin --group=system:serviceaccounts || true
           eval $(minikube docker-env)
-          # - Exclude Volcano test (-Pvolcano), batch jobs need more CPU resource
-          build/sbt -Pkubernetes -Pkubernetes-integration-tests -Dspark.kubernetes.test.namespace=default \
+
+          build/sbt -Pkubernetes -Pkubernetes-integration-tests \
             -Dspark.kubernetes.test.driverRequestCores=0.5 -Dspark.kubernetes.test.executorRequestCores=0.2 \
-            -Dspark.kubernetes.test.deployMode=minikube -Dspark.kubernetes.test.imageRepo=ghcr.io/yikun/spark-docker \
-            -Dspark.kubernetes.test.imageTag=3.3.0 -Dspark.kubernetes.test.jvmImage=spark-0919 \
-            -Dspark.kubernetes.test.pythonImage=spark-0919 "kubernetes-integration-tests/runIts"
+            -Dspark.kubernetes.test.deployMode=minikube -Dspark.kubernetes.test.imageRepo=${TEST_REPO} \
+            -Dtest.exclude.tags=r \
+            -Dspark.kubernetes.test.imageTag=${UNIQUE_IMAGE_TAG} \
+            -Dspark.kubernetes.test.jvmImage=${IMAGE_NAME} -Dspark.kubernetes.test.pythonImage=${IMAGE_NAME} \
+            "kubernetes-integration-tests/runIts"
 
       - name: Test - Upload Spark on K8S integration tests log files
-        if: failure()
+        # TODO: change this to failure()
+        if: always()
         uses: actions/upload-artifact@v2
         with:
           name: spark-on-kubernetes-it-log
           path: "**/target/integration-tests.log"
 
-      - name: Push (Spark + PySpark)
+      - name: Build and push Image
         uses: docker/build-push-action@v2
         with:
           context: ${{ env.IMAGE_PATH }}
