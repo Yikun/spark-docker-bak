@@ -27,12 +27,11 @@ jobs:
   main:
     runs-on: ubuntu-latest
     strategy:
-      max-parallel: 1
       matrix:
         spark_version: [3.3.0]
         scala_version: [2.12]
         java_version: [11]
-        image_suffix: [python3-ubuntu] #, ubuntu, r-ubuntu, python3-r-ubuntu]
+        image_suffix: [python3-ubuntu, ubuntu, r-ubuntu, python3-r-ubuntu]
     steps:
       - name: Checkout Spark repository
         uses: actions/checkout@v2
@@ -82,12 +81,12 @@ jobs:
 
       - name: Print Image tags
         run: |
-          echo ${UNIQUE_IMAGE_TAG}
-          echo ${TEST_REPO}
-          echo ${IMAGE_NAME}
-          echo ${IMAGE_PATH}
-          echo ${IMAGE_TAGS} | xargs -d"," -n1
-          echo ${TEST_IMAGE_TAGS} | xargs -d"," -n1
+          echo "UNIQUE_IMAGE_TAG: "${UNIQUE_IMAGE_TAG}
+          echo "TEST_REPO: "${TEST_REPO}
+          echo "IMAGE_NAME: "${IMAGE_NAME}
+          echo "IMAGE_PATH: "${IMAGE_PATH}
+          echo "IMAGE_TAGS: "${IMAGE_TAGS} | xargs -d"," -n1
+          echo "TEST_IMAGE_TAGS: "${TEST_IMAGE_TAGS} | xargs -d"," -n1
 
       - name: Cache Scala, SBT and Maven
         uses: actions/cache@v2
@@ -148,25 +147,29 @@ jobs:
       - name: Test - Run Spark on K8S integration test (With driver cpu 0.5, executor cpu 0.2 limited)
         working-directory: ${{ github.workspace }}/spark
         run: |
-          # Prepare PV test
-          PVC_TMP_DIR=$(mktemp -d)
-          export PVC_TESTS_HOST_PATH=$PVC_TMP_DIR
-          export PVC_TESTS_VM_PATH=$PVC_TMP_DIR
-          minikube mount ${PVC_TESTS_HOST_PATH}:${PVC_TESTS_VM_PATH} --gid=0 --uid=185 &
           kubectl create clusterrolebinding serviceaccounts-cluster-admin --clusterrole=cluster-admin --group=system:serviceaccounts || true
           eval $(minikube docker-env)
 
-          build/sbt -Pkubernetes -Pkubernetes-integration-tests \
-            -Dspark.kubernetes.test.driverRequestCores=0.5 -Dspark.kubernetes.test.executorRequestCores=0.2 \
-            -Dspark.kubernetes.test.deployMode=minikube -Dspark.kubernetes.test.imageRepo=${TEST_REPO} \
-            -Dtest.exclude.tags=r \
-            -Dspark.kubernetes.test.imageTag=${UNIQUE_IMAGE_TAG} \
-            -Dspark.kubernetes.test.jvmImage=${IMAGE_NAME} -Dspark.kubernetes.test.pythonImage=${IMAGE_NAME} \
-            "kubernetes-integration-tests/runIts"
+          OPTS="-Pkubernetes -Pkubernetes-integration-tests "
+          OPTS+="-Dspark.kubernetes.test.driverRequestCores=0.5 -Dspark.kubernetes.test.executorRequestCores=0.2 "
+          OPTS+="-Dspark.kubernetes.test.deployMode=minikube "
+          OPTS+="-Dspark.kubernetes.test.imageRepo=${TEST_REPO} -Dspark.kubernetes.test.imageTag=${UNIQUE_IMAGE_TAG} "
+          OPTS+="-Dspark.kubernetes.test.jvmImage=${IMAGE_NAME} "
+
+          build/sbt $OPTS 'kubernetes-integration-tests/testOnly -- -z "Run SparkPi"'
+
+          if echo ${{ matrix.image_suffix }} | grep -q "python"; then
+            OPTS+="-Dspark.kubernetes.test.pythonImage=${IMAGE_NAME} "
+            build/sbt $OPTS 'kubernetes-integration-tests/testOnly -- -z "Run PySpark"'
+          fi
+
+          if echo ${{ matrix.image_suffix }} | grep -q "r-"; then
+            OPTS+="-Psparkr -Dtest.include.tags=r -Dspark.kubernetes.test.rImage=${IMAGE_NAME} "
+            build/sbt $OPTS 'kubernetes-integration-tests/testOnly'
+          fi
 
       - name: Test - Upload Spark on K8S integration tests log files
-        # TODO: change this to failure()
-        if: always()
+        if: failure()
         uses: actions/upload-artifact@v2
         with:
           name: spark-on-kubernetes-it-log

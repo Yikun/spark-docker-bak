@@ -34,7 +34,6 @@ RUN set -ex && \
     apt install -y r-base r-base-dev && \
     mkdir -p /opt/spark && \
     mkdir /opt/spark/python && \
-    mkdir /opt/spark/R && \
     mkdir -p /opt/spark/examples && \
     mkdir -p /opt/spark/work-dir && \
     touch /opt/spark/RELEASE && \
@@ -72,7 +71,7 @@ RUN set -ex; \
     mv data /opt/spark/; \
     mv python/pyspark /opt/spark/python/pyspark/; \
     mv python/lib /opt/spark/python/lib/; \
-    mv R /opt/spark/R; \
+    mv R /opt/spark/; \
     cd ..; \
     rm -rf "$SPARK_TMP";
 
