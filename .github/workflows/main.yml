@@ -17,20 +17,43 @@
 # under the License.
 #
 
-name: Publish
+name: Main (Build/Test/Publish)
 
 on:
-  push:
-    branches:
-    - '**'
+  workflow_call:
+    inputs:
+      spark:
+        description: The Spark version of Spark image.
+        required: true
+        type: string
+        default: 3.3.0
+      scala:
+        description: The Scala version of Spark image.
+        required: true
+        type: string
+        default: 2.12
+      java:
+        description: The Java version of Spark image.
+        required: true
+        type: string
+        default: 11
+      publish:
+        description: Publish the image or not.
+        required: false
+        type: boolean
+        default: false
+
 jobs:
   main:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        spark_version: [3.3.0]
-        scala_version: [2.12]
-        java_version: [11]
+        spark_version:
+          - ${{ inputs.spark }}
+        scala_version:
+          - ${{ inputs.scala }}
+        java_version:
+          - ${{ inputs.java }}
         image_suffix: [python3-ubuntu, ubuntu, r-ubuntu, python3-r-ubuntu]
     steps:
       - name: Checkout Spark repository
@@ -63,8 +86,8 @@ jobs:
           UNIQUE_IMAGE_TAG=${{ matrix.spark_version }}-$TAG
 
           # Find the tags in version.json according to given path and repo
-          IMAGE_TAGS=`./image-meta.py -p $IMAGE_PATH -r $REPO/$IMAGE_NAME`
-          TEST_IMAGE_TAGS=`./image-meta.py -p $IMAGE_PATH -r $TEST_REPO/$IMAGE_NAME`
+          IMAGE_TAGS=`./image-meta.py -p $IMAGE_PATH -i $REPO/$IMAGE_NAME`
+          TEST_IMAGE_TAGS=`./image-meta.py -p $IMAGE_PATH -i $TEST_REPO/$IMAGE_NAME`
 
           # Unique image tag in each version: scala2.12-java11-python3-ubuntu
           echo "UNIQUE_IMAGE_TAG=${UNIQUE_IMAGE_TAG}" >> $GITHUB_ENV
@@ -88,23 +111,7 @@ jobs:
           echo "IMAGE_TAGS: "${IMAGE_TAGS} | xargs -d"," -n1
           echo "TEST_IMAGE_TAGS: "${TEST_IMAGE_TAGS} | xargs -d"," -n1
 
-      - name: Cache Scala, SBT and Maven
-        uses: actions/cache@v2
-        with:
-          path: |
-            build/apache-maven-*
-            build/scala-*
-            build/*.jar
-            ~/.sbt
-          key: build-${{ matrix.spark_version }}-scala${{ matrix.scala_version }}-java${{ matrix.java_version }}
-
-      - name: Cache Coursier local repository
-        uses: actions/cache@v2
-        with:
-          path: ~/.cache/coursier
-          key: build-${{ matrix.spark_version }}-scala${{ matrix.scala_version }}-java${{ matrix.java_version }}
-
-      - name: Build and push test image
+      - name: Test - Build and push test image
         uses: docker/build-push-action@v2
         with:
           context: ${{ env.IMAGE_PATH }}
@@ -132,6 +139,23 @@ jobs:
         uses: actions/setup-java@v1
         with:
           java-version: ${{ matrix.java_version }}
+
+      - name: Test - Cache Scala, SBT and Maven
+        uses: actions/cache@v2
+        with:
+          path: |
+            build/apache-maven-*
+            build/scala-*
+            build/*.jar
+            ~/.sbt
+          key: build-${{ matrix.spark_version }}-scala${{ matrix.scala_version }}-java${{ matrix.java_version }}
+
+      - name: Test - Cache Coursier local repository
+        uses: actions/cache@v2
+        with:
+          path: ~/.cache/coursier
+          key: build-${{ matrix.spark_version }}-scala${{ matrix.scala_version }}-java${{ matrix.java_version }}
+
       - name: Test - Start minikube
         run: |
           # See more in "Installation" https://minikube.sigs.k8s.io/docs/start/
@@ -175,7 +199,8 @@ jobs:
           name: spark-on-kubernetes-it-log
           path: "**/target/integration-tests.log"
 
-      - name: Build and push Image
+      - name: Push Image
+        if: ${{ inputs.publish }}
         uses: docker/build-push-action@v2
         with:
           context: ${{ env.IMAGE_PATH }}

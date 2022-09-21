@@ -15,10 +15,10 @@ def parse_opts():
     )
 
     parser.add_argument(
-        "-r",
-        "--repo",
+        "-i",
+        "--image",
         type=str,
-        help="The image repo (such as `apache/spark`)",
+        help="The complete image registry url (such as `apache/spark`)",
     )
 
     parser.add_argument(
@@ -45,7 +45,7 @@ def parse_opts():
 def main():
     opts = parse_opts()
     filepath = opts.path
-    repo = opts.repo
+    image = opts.image
     mode = opts.mode
     version_file = opts.file
 
@@ -56,7 +56,7 @@ def main():
             for v in versions:
                 if v.get("path") == filepath:
                     tags = v.get("tags")
-        print(",".join([ "%s:%s" % (repo, t) for t in tags]))
+        print(",".join([ "%s:%s" % (image, t) for t in tags]))
     elif mode == "manifest":
         with open(version_file, "r") as f:
             versions = json.load(f).get("versions")
