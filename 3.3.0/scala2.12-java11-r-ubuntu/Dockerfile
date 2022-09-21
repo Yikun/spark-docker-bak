@@ -31,7 +31,6 @@ RUN set -ex && \
     apt install -y gnupg2 wget bash tini libc6 libpam-modules krb5-user libnss3 procps net-tools && \
     apt install -y r-base r-base-dev && \
     mkdir -p /opt/spark && \
-    mkdir /opt/spark/R && \
     mkdir -p /opt/spark/examples && \
     mkdir -p /opt/spark/work-dir && \
     touch /opt/spark/RELEASE && \
@@ -67,7 +66,7 @@ RUN set -ex; \
     mv examples /opt/spark/; \
     mv kubernetes/tests /opt/spark/; \
     mv data /opt/spark/; \
-    mv R /opt/spark/R; \
+    mv R /opt/spark/; \
     cd ..; \
     rm -rf "$SPARK_TMP";
 
