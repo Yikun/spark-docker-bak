@@ -18,13 +18,6 @@ FROM eclipse-temurin:11-jre-focal
 
 ARG spark_uid=185
 
-# Before building the docker image, first build and make a Spark distribution following
-# the instructions in https://spark.apache.org/docs/latest/building-spark.html.
-# If this docker file is being used in the context of building your images from a Spark
-# distribution, the docker build command should be invoked from the top level directory
-# of the Spark distribution. E.g.:
-# docker build -t spark:latest -f kubernetes/dockerfiles/spark/Dockerfile .
-
 RUN set -ex && \
     apt-get update && \
     ln -s /lib /lib64 && \
@@ -44,7 +37,7 @@ RUN set -ex && \
 # https://downloads.apache.org/spark/KEYS
 ENV SPARK_TGZ_URL=https://dlcdn.apache.org/spark/spark-3.3.0/spark-3.3.0-bin-hadoop3.tgz \
     SPARK_TGZ_ASC_URL=https://downloads.apache.org/spark/spark-3.3.0/spark-3.3.0-bin-hadoop3.tgz.asc \
-    GPG_KEY=3D2F69CEED5E30F6252935903FF7C4E834D9EA44
+    GPG_KEY=E298A3A825C0D65DFD57CBB651716619E084DAB9
 
 RUN set -ex; \
     export SPARK_TMP="$(mktemp -d)"; \

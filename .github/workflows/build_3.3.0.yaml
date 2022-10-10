@@ -24,7 +24,7 @@ on:
     branches:
     - 'master'
     paths:
-      - '3.3.0/'
+      - '3.3.0/**'
       - '.github/workflows/main.yml'
 
 jobs:
