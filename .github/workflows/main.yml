@@ -78,10 +78,11 @@ jobs:
         run: |
           TAG=scala${{ matrix.scala_version }}-java${{ matrix.java_version }}-${{ matrix.image_suffix }}
 
-          # TODO: change yikun, yikunkero to apache
-          TEST_REPO=ghcr.io/yikun/spark-docker
+          REPO_OWNER=$(echo "${{ github.repository_owner }}" | tr '[:upper:]' '[:lower:]')
+          TEST_REPO=ghcr.io/$REPO_OWNER/spark-docker
+          # TODO: Change yikunkero to apache
           REPO=yikunkero
-          IMAGE_NAME=spark-0920
+          IMAGE_NAME=spark
           IMAGE_PATH=${{ matrix.spark_version }}/$TAG
           UNIQUE_IMAGE_TAG=${{ matrix.spark_version }}-$TAG
 
